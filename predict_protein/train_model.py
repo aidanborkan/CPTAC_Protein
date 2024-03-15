@@ -35,10 +35,15 @@ class LearnCPTAC(object):
         """
         self.df = cptac_df
 
-        self.all_proteomics = [re.sub('_proteomics', "", protein) for protein in self.df.columns if
-                               protein.endswith('_proteomics')]
-        self.all_transcriptomics = [re.sub('_transcriptomics', "", transcript) for transcript in self.df.columns if
-                                    transcript.endswith('_transcriptomics')]
+        #AB:03.14.2024 - this logic won't work. our identifiers are _transcriptomics and nothing for proteins
+
+        self.all_transcriptomics = [transcript for transcript in self.df.columns if transcript.endswith('_transcriptomics')]
+        self.all_proteomics = [protein for protein in self.df.columns if not protein.endswith('_transcriptomics')]
+
+        #self.all_proteomics = [re.sub('_proteomics', "", protein) for protein in self.df.columns if
+                             #  protein.endswith('_proteomics')]
+       # self.all_transcriptomics = [re.sub('_transcriptomics', "", transcript) for transcript in self.df.columns if
+                                   # transcript.endswith('_transcriptomics')]
 
         # these are the proteins with both transcriptomics and proteomics data in the cptac-df
         self.shared_proteins = [protein for protein in self.all_proteomics if protein in self.all_transcriptomics]
