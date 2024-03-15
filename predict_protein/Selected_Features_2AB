@@ -1,0 +1,62 @@
+#AB 03.14.2024
+#cloned and modified from: https://github.com/Lau-Lab/CPTAC_Protein/edit/main/predict_protein/select_features.py
+#we need to modify filepaths
+#changing select_features.py
+
+import pandas as pd
+import os
+
+class GetProtein(object):
+    def __init__(self):
+        # Update the import_path to the specific location of your file
+        import_path = r'C:\Users\borkana\Downloads'
+        file_name = 'tidy_stringdb_homosapiens.txt'
+        file_path = os.path.join(import_path, file_name)
+
+        if os.path.exists(file_path):
+            self.df = pd.read_csv(file_path, sep='\t')
+        else:
+            raise FileNotFoundError(f"File not found at {file_path}")
+
+        self.df = self.df.sort_values('combined_score')
+
+    def find_interactor(self, bait, combined_score=500, max_proteins=100):
+         """
+        :param bait:
+        :param combined_score: Minimum STRINGdb score to fetch
+        :param max_proteins:  Maximum number of entries with max combined_score to return
+        :return:
+        """
+            
+        interactors = self.df[(self.df.p1 == bait) & (self.df.combined_score > combined_score)]
+        interactors = interactors.sort_values('combined_score', ascending=False).p2
+        interactors = list(set(interactors[:max_proteins]))  # Remove redundant interactors
+
+        return [bait] + interactors
+
+class GetComplex(object):
+    """
+    Get interacting complex from a downloaded CORUM file. The CORUM DB file was modified by an R script to turn
+    Uniprot into GeneName
+    """
+    def __init__(self):
+        # Update the import_path to the specific location of your file
+        import_path = r'C:\Users\borkana\Downloads'
+        file_name = 'tidy_corum_homosapiens.txt'
+        file_path = os.path.join(import_path, file_name)
+
+        if os.path.exists(file_path):
+            self.corum = pd.read_csv(file_path, sep='\t')
+        else:
+            raise FileNotFoundError(f"File not found at {file_path}")
+
+    def find_cosubunits(self, bait):
+         """
+        Find other proteins that belong to the same complex as the bait
+        :param bait:
+        :return:
+        """
+        complexes = list(self.corum[(self.corum.SubunitGN == bait)]['ComplexID'].values)
+        cosubunits = list(self.corum[(self.corum.ComplexID.isin(complexes))].SubunitGN.values)
+
+        return list(set(cosubunits + [bait]))
