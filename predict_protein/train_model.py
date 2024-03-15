@@ -19,7 +19,8 @@ from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.ensemble import RandomForestRegressor, VotingRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression, ElasticNetCV
 
-from . import select_features, params
+#from . import select_features, params
+#AB 03.15.2024 silence this
 from .select_features import GetProtein, GetComplex
 
 
