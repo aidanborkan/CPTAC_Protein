@@ -6,6 +6,7 @@ import cptac
 import numpy as np
 from sklearn.preprocessing import StandardScaler, RobustScaler
 
+'''
 def download_cptac(n_tumors: int = 2,
                    ):
     # List current CPTAC datasets
@@ -137,3 +138,71 @@ def download_cptac(n_tumors: int = 2,
     i_std.index = 'HN' + i_std.index
 
     return [h_std, f_std, e_std, g_std, a_std, d_std, b_std, c_std, ][:n_tumors]
+    '''
+
+#AB 03.28.2024
+
+# Define your cancer types and data sources using the provided map
+cancer_types_map = {
+    "en": "Ucec",
+    "ov": "Ov",
+    "co": "Coad",
+    "br": "Brca",
+    "lu": "Luad",
+    "cc": "Ccrcc",
+    "gb": "Gbm",
+    "ls": "Lscc",
+    "hn": "Hnscc"
+}
+
+# Define your data sources for transcriptomics and proteomics
+data_sources = {
+    "transcriptomics": ["bcm", "broad", "washu"],
+    "proteomics": ["bcm", "umich"]
+}
+
+# Initialize an object for each cancer type
+for abbreviation, cancer_type in cancer_types_map.items():
+    globals()[abbreviation] = getattr(cptac, cancer_type)()
+
+# Now, you can define the sources based on your data_sources dictionary
+transcriptomics_sources = data_sources["transcriptomics"]
+proteomics_sources = data_sources["proteomics"]
+
+# Function to join transcriptomic and proteomic data for each cancer type, storing the result in a variable named after the cancer type abbreviation
+def join_and_process_omics_data(cancer_obj, cancer_type_abbr, transcriptomics_sources, proteomics_sources):
+    joined_data_list = []
+
+    # Iterate through each combination of transcriptomics and proteomics sources
+    for trans_source in transcriptomics_sources:
+        for prot_source in proteomics_sources:
+            try:
+                # Attempt to get transcriptomics and proteomics data from the specified sources
+                trans_data = cancer_obj.get_transcriptomics(source=trans_source)
+                prot_data = cancer_obj.get_proteomics(source=prot_source)
+                
+                # Attempt to join the transcriptomics and proteomics data
+                joined_data = cancer_obj.join_omics_to_omics(df1_name='transcriptomics', df2_name='proteomics', 
+                                                             df1_source=trans_source, df2_source=prot_source)
+
+                # If the joined data has MultiIndex columns, check if the second level is redundant and drop it
+                if isinstance(joined_data.columns, pd.MultiIndex) and joined_data.columns.get_level_values(1).nunique() == 1:
+                    joined_data.columns = joined_data.columns.droplevel(1)
+
+                # Add the processed joined data to the list for this cancer type
+                joined_data_list.append(joined_data)
+
+            except Exception as e:
+                print(f"Failed to join data for {cancer_type_abbr} with {trans_source} transcriptomics and {prot_source} proteomics: {e}")
+    
+    # Concatenate all joined data DataFrames for this cancer type, if there are any
+    if joined_data_list:
+        # Concatenate the list of DataFrames into one DataFrame
+        final_joined_data = pd.concat(joined_data_list, axis=1)
+        # Store the final concatenated DataFrame in a global variable named after the cancer type abbreviation
+        globals()[cancer_type_abbr] = final_joined_data
+        print(f"Final joined data for {cancer_type_abbr} is now available in the variable: {cancer_type_abbr}")
+
+# Use the cancer_objects to join and process omics data from each source for each cancer type
+for abbr, cancer_obj in cancer_objects.items():
+    join_and_process_omics_data(cancer_obj, abbr, transcriptomics_sources, proteomics_sources)
