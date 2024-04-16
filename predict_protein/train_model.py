@@ -288,7 +288,7 @@ class LearnCPTAC(object):
                                            criterion='squared_error',
                                            max_depth=4,
                                            random_state=2,
-                                           # oob_score=True,
+                                           oob_score=True,
                                            n_jobs=-1)
 
             vreg = VotingRegressor(estimators=[('en', elastic), ('rf', forest), ])
@@ -298,7 +298,7 @@ class LearnCPTAC(object):
                                          criterion='squared_error',
                                          max_depth=4,
                                          random_state=2,
-                                         # oob_score=True,
+                                         oob_score=True,
                                          n_jobs=-1)
 
         elif self._method == 'elastic':
