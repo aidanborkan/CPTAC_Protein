@@ -1,0 +1,90 @@
+#In a separate script we now want to upload the _std datasets
+
+import pandas as pd
+
+# List of standardized dataset file names
+std_datasets = ['a_std.csv', 'b_std.csv', 'c_std.csv', 'd_std.csv', 'e_std.csv', 'f_std.csv', 'g_std.csv', 'h_std.csv', 'i_std.csv']
+
+# Loop through the file names and read each file into a DataFrame
+for file_name in std_datasets:
+    try:
+        # Construct the DataFrame variable name by stripping '.csv' from the file name
+        df_name = file_name.split('.')[0]
+        # Use globals() to dynamically create variables
+        globals()[df_name] = pd.read_csv(file_name, low_memory=False)
+        print(f"Loaded {file_name} into DataFrame '{df_name}'")
+    except FileNotFoundError:
+        print(f"File {file_name} not found. Please check the file path.")
+
+#float 64 is an inefficient way to store data we need to convert this is consuming too much memory
+#convert in downcasting before joining
+#let's save a copy when downcast
+
+
+import pandas as pd
+import numpy as np
+from tqdm.auto import tqdm
+
+def downcast_column(df, col, dtype):
+    # First, make a copy of the DataFrame to avoid changing the original one during the downcast
+    df_copy = df.copy()
+    
+    # Check for NaN and Inf values before downcasting
+    if df_copy[col].isnull().any():
+        print(f"Warning: Column {col} contains NaN values before downcasting.")
+    if np.isinf(df_copy[col].values).any():
+        print(f"Warning: Column {col} contains Inf values before downcasting.")
+
+    # Perform the downcasting
+    try:
+        df_copy[col] = df_copy[col].astype(dtype)
+    except ValueError as e:
+        print(f"Error downcasting column {col}: {e}")
+        return df  # Return the original DataFrame if downcasting failed
+
+    # Verify if NaN values were introduced after downcasting
+    if df_copy[col].isnull().any():
+        print(f"Error: Column {col} contains NaN values after downcasting.")
+        return df  # Return the original DataFrame
+
+    return df_copy  # Return the modified DataFrame if downcasting was successful
+
+def clean_dataframe(df):
+    return pd.DataFrame(df.values, columns=df.columns, index=df.index)
+
+def split_columns_into_chunks(columns, batch_size):
+    return [columns[i:i + batch_size] for i in range(0, len(columns), batch_size)]
+
+def sequential_downcast(df, batch_size=15000):
+    df = clean_dataframe(df)  # Clean DataFrame to avoid internal inconsistencies
+    float_cols = split_columns_into_chunks(df.select_dtypes(include=['float64']).columns, batch_size)
+    int_cols = split_columns_into_chunks(df.select_dtypes(include=['int64']).columns, batch_size)
+
+    # Downcast columns sequentially and handle exceptions
+    df = downcast_columns(df, float_cols, 'float32')
+    df = downcast_columns(df, int_cols, 'int32')
+
+    return df
+
+# Process and save each DataFrame
+df_list = [a_std, c_std, d_std, e_std, f_std, g_std, h_std, i_std]
+labels = ['a_std', 'c_std', 'd_std', 'e_std', 'f_std', 'g_std', 'h_std', 'i_std']
+local_directory = 'D:/Aidan/'
+
+for df, label in zip(tqdm(df_list, desc='Processing DataFrames'), labels):
+    try:
+        downcasted_df = sequential_downcast(df)
+        file_path = f"{local_directory}{label}_downcasted.csv"
+        downcasted_df.to_csv(file_path, index=False)
+        print(f"Downcasted and saved {label} to {file_path}")
+    except Exception as e:
+        print(f"Failed to process {label}: {e}")
+
+#04.24.2024: set Patient_ID as the column
+
+dataframe_list = [a_std_downcasted, b_std_downcasted, c_std_downcasted, d_std_downcasted, 
+                  e_std_downcasted, f_std_downcasted, g_std_downcasted, h_std_downcasted, i_std_downcasted]
+
+# Setting 'Patient_ID' as the index for each DataFrame
+for df in dataframe_list:
+    df.set_index('Patient_ID', inplace=True)
