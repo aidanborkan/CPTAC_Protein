@@ -20,7 +20,29 @@ from sklearn.ensemble import RandomForestRegressor, VotingRegressor, GradientBoo
 from sklearn.linear_model import LinearRegression, ElasticNetCV
 
 from . import select_features, params
-from .select_features import GetProtein, GetComplex
+# -*- coding: utf-8 -*-
+
+""" downloads cptac data and predict with scikit-learn """
+
+import pandas as pd
+from matplotlib import pyplot as plt
+import seaborn as sns
+import re
+import tqdm
+import numpy as np
+import os
+import datetime
+import xgboost as xgb
+
+from sklearn.impute import SimpleImputer
+from sklearn.feature_selection import VarianceThreshold
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.ensemble import RandomForestRegressor, VotingRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression, ElasticNetCV
+
+#from . import select_features, params
+from select_features import GetProtein, GetComplex
 
 
 class LearnCPTAC(object):
@@ -34,6 +56,14 @@ class LearnCPTAC(object):
         :param cptac_df:
         """
         self.df = cptac_df
+        #MODIFICATION
+        #AB:03.14.2024 - this logic won't work. our identifiers are _transcriptomics and nothing for proteins
+        #AB:03.21.2024 - modification: look for _transcriptomics_ and _proteomics_ witin the column names
+        #self.all_transcriptomics = [transcript for transcript in self.df.columns if '_transcriptomics' in transcript]
+        #self.all_proteomics = [protein for protein in self.df.columns if '_proteomics' in protein]
+        #AB:04.12.2024: fix how we identify transcript and protein
+        #self.all_transcriptomics = [col for col in self.df.columns if 'transcriptomics' in col]
+        #self.all_proteomics = [col for col in self.df.columns if 'proteomics' in col]
 
         self.all_proteomics = [re.sub('_proteomics', "", protein) for protein in self.df.columns if
                                protein.endswith('_proteomics')]
@@ -133,13 +163,22 @@ class LearnCPTAC(object):
         :return:  x_train, x_test, y_train, y_test
         """
 
-        y_df = self.df[[protein_to_do + '_proteomics']]
-        y_df = y_df.dropna(subset=[protein_to_do + '_proteomics'])
+        #y_df = self.df[[protein_to_do + '_proteomics']]
+        #use a regex
+        # Filter columns for the specific protein
+        regex_pattern = protein_to_do + '_proteomics$'
+        y_df = self.df.filter(regex=regex_pattern)
+    
+        # After filtering, the column names in y_df will be exactly those that matched the regex,
+        # so you can safely call dropna() on the entire DataFrame without specifying a subset.
+        y_df = y_df.dropna()
 
         # skip proteins with fewer than 20 samples
         # 2021-11-12 this should be filtered at the protein step (y_df) rather than the
         # transcript-protein joined set (xy_df). We will do a simple impute for the transcripts instead
-        if len(y_df) < params.min_proteins:
+        min_proteins = 20
+        
+        if len(y_df) < min_proteins:
             tqdm.tqdm.write('Not enough proteomics observations. Skipping protein.')
             return None
 
@@ -150,11 +189,20 @@ class LearnCPTAC(object):
         elif self._features == 'all':
             proteins_to_include = self.shared_proteins
 
+#04.15.2024: try this
+        
         elif self._features == 'string':
-            string_interactors = self.stringdb.find_interactor(protein_to_do,
-                                                               combined_score=200,
-                                                               max_proteins=1000,
-                                                               )
+            try:
+                string_interactors = self.stringdb.find_interactor(
+                    protein_to_do,
+                    combined_score=200,
+                    max_proteins=1000,
+                )
+                print("Interactors found: ", len(string_interactors))  # Debugging output
+            except Exception as e:
+                print("Error finding interactors:", e)  # Error handling
+                string_interactors = []  # Ensure variable is defined
+
             proteins_to_include = [p for p in string_interactors if p in self.shared_proteins]
 
         elif self._features == 'stringhi':
@@ -273,6 +321,7 @@ class LearnCPTAC(object):
 
         elif self._method == 'voting':
             # Train model
+            #AB: unsilence oob_score =True
             elastic = ElasticNetCV(l1_ratio=[0.1, 0.5, 0.9, 0.95],
                                    cv=5,
                                    fit_intercept=False,
@@ -287,7 +336,7 @@ class LearnCPTAC(object):
                                            criterion='squared_error',
                                            max_depth=4,
                                            random_state=2,
-                                           # oob_score=True,
+                                           oob_score=True,
                                            n_jobs=-1)
 
             vreg = VotingRegressor(estimators=[('en', elastic), ('rf', forest), ])
@@ -297,7 +346,7 @@ class LearnCPTAC(object):
                                          criterion='squared_error',
                                          max_depth=4,
                                          random_state=2,
-                                         # oob_score=True,
+                                         oob_score=True,
                                          n_jobs=-1)
 
         elif self._method == 'elastic':
@@ -403,6 +452,10 @@ class LearnCPTAC(object):
                                   index=[protein_to_do])
 
         return {'model': vreg, 'metrics': metrics_df}
+
+
+
+
 
 
 
